@@ -106,7 +106,7 @@ export const moveTo = (
         // no need to move, path complete
         clearCachedPath(creep, cache);
         // register move intent to stay here or in an adjacent viable position
-        const cm = configureRoomCallback(actualOpts)(creep.pos.roomName);
+        const cm = configureRoomCallback(actualOpts, normalizedTargets)(creep.pos.roomName);
         move(
           creep,
           [
@@ -232,7 +232,7 @@ export const moveTo = (
   // move to any viable target square, if path is nearly done
   if (path && path[path.length - 2]?.isEqualTo(creep.pos)) {
     // Nearly at end of path
-    let cm = configureRoomCallback(actualOpts)(creep.pos.roomName);
+    let cm = configureRoomCallback(actualOpts, normalizedTargets)(creep.pos.roomName);
 
     const notBlockedOnCostMatrix =
       cm instanceof PathFinder.CostMatrix
