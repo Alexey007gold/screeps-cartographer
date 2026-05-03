@@ -12,6 +12,7 @@ export interface CostMatrixOptions {
   roadCost?: number;
   avoidTargets?: (roomName: string) => MoveTarget[];
   avoidTargetGradient?: number;
+  maxRooms?: number;
 }
 
 /**
@@ -65,6 +66,14 @@ export const mutateCostMatrix = (cm: CostMatrix, room: string, opts: CostMatrixO
       return [...p.portalMap.reversed.keys()];
     });
     portalCoords.forEach(c => cm.set(c.x, c.y, 255));
+  }
+  if (opts.maxRooms === 1) {
+    for (let i = 0; i < 50; i++) {
+      cm.set(0, i, 255);
+      cm.set(49, i, 255);
+      cm.set(i, 0, 255);
+      cm.set(i, 49, 255);
+    }
   }
   for (let target of targets) {
     if (target.pos.roomName === room && target.range === 0) {
