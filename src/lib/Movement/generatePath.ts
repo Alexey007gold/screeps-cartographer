@@ -2,6 +2,7 @@ import { config } from 'config';
 import { MoveOpts, MoveTarget } from '../';
 import { configureRoomCallback } from '../CostMatrixes';
 import { findRoute } from '../WorldMap/findRoute';
+import { pathSearchRef } from './PathUtil';
 
 /**
  * Generates a path with PathFinder.
@@ -29,7 +30,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
   if (!routes?.length || routes.length === 1) {
     const rooms = routes?.[0]?.rooms;
     // No portals - just generate a single path
-    const result = PathFinder.search(origin, targets, {
+    const result = pathSearchRef.fn(origin, targets, {
       ...actualOpts,
       maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * (rooms?.length ?? 1)),
       roomCallback: configureRoomCallback(actualOpts, targets, rooms)
@@ -45,7 +46,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
     for (const route of routes) {
       if (!route.portalSet) {
         // no portal set - this is the last segment of the path, go to the actual targets
-        const result = PathFinder.search(workingOrigin, targets, {
+        const result = pathSearchRef.fn(workingOrigin, targets, {
           ...actualOpts,
           maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * route.rooms.length),
           roomCallback: configureRoomCallback(actualOpts, targets, route.rooms)
@@ -60,7 +61,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
             ? [...route.portalSet.portalMap.keys()]
             : [...route.portalSet.portalMap.values()]
         ).map(coord => ({ pos: new RoomPosition(coord.x, coord.y, lastRoom), range: 1 }));
-        const result = PathFinder.search(workingOrigin, portalTargets, {
+        const result = pathSearchRef.fn(workingOrigin, portalTargets, {
           ...actualOpts,
           maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * route.rooms.length),
           roomCallback: configureRoomCallback(actualOpts, targets, route.rooms)
