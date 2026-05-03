@@ -32,7 +32,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
     const result = PathFinder.search(origin, targets, {
       ...actualOpts,
       maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * (rooms?.length ?? 1)),
-      roomCallback: configureRoomCallback(actualOpts, rooms)
+      roomCallback: configureRoomCallback(actualOpts, targets, rooms)
     });
     if (!result.path.length || result.incomplete) return undefined;
 
@@ -48,7 +48,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
         const result = PathFinder.search(workingOrigin, targets, {
           ...actualOpts,
           maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * route.rooms.length),
-          roomCallback: configureRoomCallback(actualOpts, route.rooms)
+          roomCallback: configureRoomCallback(actualOpts, targets, route.rooms)
         });
         if (!result.path.length || result.incomplete) return undefined;
         path.push(...result.path);
@@ -63,7 +63,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
         const result = PathFinder.search(workingOrigin, portalTargets, {
           ...actualOpts,
           maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * route.rooms.length),
-          roomCallback: configureRoomCallback(actualOpts, route.rooms)
+          roomCallback: configureRoomCallback(actualOpts, targets, route.rooms)
         });
         if (!result.path.length || result.incomplete) return undefined;
         // paths to range 1 of portal - select a portal at the end of the path
