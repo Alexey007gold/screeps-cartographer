@@ -119,6 +119,7 @@ export * from './Movement/moveTo';
 export * from './Movement/pull';
 export * from './Movement/roomPositions';
 export * from './Movement/selectors';
+export * from './Movement/PathUtil';
 export { blockSquare, getMoveIntents } from './TrafficManager/moveLedger';
 export * from './TrafficManager/reconcileTraffic';
 
