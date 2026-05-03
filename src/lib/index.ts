@@ -112,6 +112,7 @@ export interface MoveOpts extends PathFinderOpts {
 }
 
 export * from './CachingStrategies';
+export * from './CachingStrategies/withSerializer';
 export * as Keys from './Keys';
 export * from './Movement/cachedPaths';
 export * from './Movement/generatePath';
