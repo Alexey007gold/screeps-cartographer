@@ -22,7 +22,7 @@ export function avoidSourceKeepers(room: string, cm: CostMatrix) {
   const skPositions = MemoryCache.with(PositionListSerializer).get(skKey(room)) ?? [];
 
   for (const pos of skPositions) {
-    calculateNearbyPositions(pos, 5, true).forEach(p => cm.set(p.x, p.y, 0xff));
+    calculateNearbyPositions(pos, 4, true).forEach(p => cm.set(p.x, p.y, 0xff));
   }
 
   return cm;
