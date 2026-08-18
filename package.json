@@ -1,14 +1,14 @@
 {
   "name": "screeps-cartographer",
-  "version": "1.8.15",
+  "version": "1.8.16",
   "description": "An advanced (and open source) movement library for Screeps",
-  "homepage": "https://glitchassassin.github.io/screeps-cartographer/",
+  "homepage": "https://screepers.github.io/screeps-cartographer/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/glitchassassin/screeps-cartographer/"
+    "url": "https://github.com/screepers/screeps-cartographer/"
   },
   "bugs": {
-    "url": "https://github.com/glitchassassin/screeps-cartographer/issues"
+    "url": "https://github.com/screepers/screeps-cartographer/issues"
   },
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
