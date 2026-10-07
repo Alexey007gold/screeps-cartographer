@@ -1,4 +1,4 @@
-import { type MoveOpts, type MoveTarget } from 'lib';
+import type { MoveOpts, MoveTarget } from '..';
 import { portalSets } from 'lib/WorldMap/portals';
 import { calculateNearbyPositions } from '../Movement/selectors';
 import { avoidSourceKeepers } from './sourceKeepers';

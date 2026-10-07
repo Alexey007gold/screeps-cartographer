@@ -125,6 +125,7 @@ export * from './Movement/selectors';
 export * from './Movement/PathUtil';
 export { blockSquare, getMoveIntents } from './TrafficManager/moveLedger';
 export * from './TrafficManager/reconcileTraffic';
+export { configureRoomCallback } from './CostMatrixes';
 
 export function preTick() {
   cleanAllCaches();

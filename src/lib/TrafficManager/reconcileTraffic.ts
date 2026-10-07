@@ -40,6 +40,10 @@ export function reconcileTraffic(opts?: ReconcileTrafficOpts) {
   for (const room of getMoveIntentRooms()) {
     if (!Game.rooms[room]) continue;
     reconcileTrafficByRoom(room, opts);
+
+    if (Game.cpu.getUsed() > 470) {
+      return;
+    }
   }
   // log that traffic management is active
   MemoryCache.with(NumberSerializer).set(keys.RECONCILE_TRAFFIC_RAN, Game.time);
@@ -117,6 +121,10 @@ function reconcileTrafficByRoom(room: string, opts?: ReconcileTrafficOpts) {
       const intentStack = [...intents.values()];
 
       while (intentStack.length) {
+        if (Game.cpu.getUsed() > 470) {
+          console.log(`reconcileTraffic: aborting in room ${room}, cpu used ${Game.cpu.getUsed().toFixed(2)}`);
+          return;
+        }
         const intent = intentStack.shift();
         if (!intent) break;
         if (intent.resolved) {

@@ -25,6 +25,22 @@ export class TestFindRoute extends CartographerTestCase {
       console.log('Route should have failed', JSON.stringify(route));
       return TestResult.FAIL;
     }
+    // Test findRoute matches Game.map.findRoute with blocked origin and blocked target
+    const origin = 'W6N8';
+    const neighbor = Object.values(Game.map.describeExits(origin) ?? {})[0];
+    if (!neighbor) {
+      console.log(`No exits from ${origin}`);
+      return TestResult.FAIL;
+    }
+    for (const blocked of [origin, neighbor]) {
+      const routeCallback = (room: string) => (room === blocked ? Infinity : undefined);
+      const engineRoutes = Game.map.findRoute(origin, neighbor, { routeCallback: room => routeCallback(room) ?? 1 }) !== ERR_NO_PATH;
+      const cartographerRoutes = findRoute(origin, [neighbor], { routeCallback }) !== undefined;
+      if (cartographerRoutes !== engineRoutes) {
+        console.log(`findRoute ${origin}->${neighbor} blocking ${blocked}: engine route=${engineRoutes}, cartographer route=${cartographerRoutes}`);
+        return TestResult.FAIL;
+      }
+    }
     return TestResult.PASS;
   }
 }
