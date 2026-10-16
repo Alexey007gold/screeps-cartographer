@@ -24,7 +24,10 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
     (rooms, { pos }) => (rooms.includes(pos.roomName) ? rooms : [pos.roomName, ...rooms]),
     [] as string[]
   );
-  let routes = findRoute(origin.roomName, targetRooms, actualOpts);
+  let routes =
+    actualOpts.routeEachTargetRoom && targetRooms.length > 1
+      ? findRouteCoveringEachTargetRoom(origin.roomName, targetRooms, actualOpts)
+      : findRoute(origin.roomName, targetRooms, actualOpts);
 
   // generate path for each route segment
   if (!routes?.length || routes.length === 1) {
@@ -88,6 +91,17 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
 
     return path;
   }
+}
+
+function findRouteCoveringEachTargetRoom(originRoom: string, targetRooms: string[], opts: MoveOpts) {
+  const routes = targetRooms.map(room => findRoute(originRoom, [room], opts));
+  if (routes.every(route => !route)) return undefined;
+  if (routes.some(route => (route?.length ?? 0) > 1)) return findRoute(originRoom, targetRooms, opts);
+  const rooms = new Set([originRoom]);
+  for (const route of routes) {
+    for (const room of route?.[0]?.rooms ?? []) rooms.add(room);
+  }
+  return [{ rooms: [...rooms] }];
 }
 
 function defaultTerrainCosts(

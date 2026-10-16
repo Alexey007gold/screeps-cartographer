@@ -109,6 +109,7 @@ export interface MoveOpts extends PathFinderOpts {
    * avoid using portals for travel.
    */
   avoidPortals?: boolean;
+  routeEachTargetRoom?: boolean;
 }
 
 export * from './CachingStrategies';
