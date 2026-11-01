@@ -27,5 +27,6 @@ export const config = {
   } as PolyStyle,
   MEMORY_CACHE_PATH: '_cg',
   MEMORY_CACHE_EXPIRATION_PATH: '_cge',
-  MEMORY_PORTAL_PATH: '_cgp'
+  MEMORY_PORTAL_PATH: '_cgp',
+  EXTERNAL_PORTAL_SOURCE: false
 };

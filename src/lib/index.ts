@@ -128,6 +128,7 @@ export { blockSquare, getMoveIntents } from './TrafficManager/moveLedger';
 export * from './TrafficManager/reconcileTraffic';
 export { configureRoomCallback } from './CostMatrixes';
 export { findPortalRoute } from './WorldMap/findPortalRoute';
+export { feedPortalLink, removePortalLink, PortalTilePair } from './WorldMap/feedPortals';
 
 export function preTick() {
   cleanAllCaches();

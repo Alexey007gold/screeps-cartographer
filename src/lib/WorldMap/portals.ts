@@ -23,7 +23,7 @@ export function getPortalSetsVersion() {
   return portalSetsVersion;
 }
 
-function linkPortalSet(portalSet: PortalSet) {
+export function linkPortalSet(portalSet: PortalSet) {
   linkOneWay(portalSet.room1, portalSet.room2, portalSet);
   linkOneWay(portalSet.room2, portalSet.room1, portalSet);
   if (portalSet.expires !== undefined) nextExpiry = Math.min(nextExpiry, portalSet.expires);
@@ -36,7 +36,7 @@ function linkOneWay(from: string, to: string, portalSet: PortalSet) {
   portalSets.set(from, map);
 }
 
-function unlinkPortalSet(room1: string, room2: string) {
+export function unlinkPortalSet(room1: string, room2: string) {
   unlinkOneWay(room1, room2);
   unlinkOneWay(room2, room1);
   portalSetsVersion++;
@@ -49,10 +49,21 @@ function unlinkOneWay(from: string, to: string) {
   if (map.size === 0) portalSets.delete(from);
 }
 
+let hydrated = false;
+
 // deserialize portal sets after a global reset
-Memory[config.MEMORY_PORTAL_PATH] ??= [];
-for (const serializedPortalSet of Memory[config.MEMORY_PORTAL_PATH]) {
-  linkPortalSet(deserializePortalSet(serializedPortalSet));
+function ensureHydrated() {
+  if (hydrated) return;
+  hydrated = true;
+  if (config.EXTERNAL_PORTAL_SOURCE) return;
+  Memory[config.MEMORY_PORTAL_PATH] ??= [];
+  for (const serializedPortalSet of Memory[config.MEMORY_PORTAL_PATH]) {
+    linkPortalSet(deserializePortalSet(serializedPortalSet));
+  }
+}
+
+export function markHydrated() {
+  hydrated = true;
 }
 
 /**
@@ -61,6 +72,8 @@ for (const serializedPortalSet of Memory[config.MEMORY_PORTAL_PATH]) {
  * (but the `room1` and `room2` don't necessarily correspond to the lookup order)
  */
 export function scanPortals(room: string) {
+  ensureHydrated();
+  if (config.EXTERNAL_PORTAL_SOURCE) return;
   // only scan highways and center rooms to save CPU
   if (!isHighway(room) && !isCenterRoom(room)) return;
 
@@ -85,6 +98,8 @@ export function scanPortals(room: string) {
 }
 
 export function cachePortals() {
+  ensureHydrated();
+  if (config.EXTERNAL_PORTAL_SOURCE) return;
   if (Game.time > nextExpiry) {
     removeExpiredPortalSets();
   }
@@ -198,6 +213,7 @@ function deserializePortalSet(serialized: string): PortalSet {
 }
 
 export function describeExitsWithPortals(room: string, includePortals = true): string[] {
+  ensureHydrated();
   // initial set with normal room exits
   const exits = new Set(Object.values(Game.map.describeExits(room) ?? {}));
 

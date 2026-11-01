@@ -17,6 +17,52 @@ const coordCodec = new Codec({ array: true, depth: 12 });
 const directionsCodec = new Codec({ depth: 3, array: true });
 const roomNameCodec = new Codec({ array: true, depth: 16 });
 const cardinals = ['WN', 'EN', 'WS', 'ES'];
+const numberCodecs = new Map<number, Codec<true>>();
+
+function numberCodec(depth: number): Codec<true> {
+  let codec = numberCodecs.get(depth);
+  if (!codec) {
+    codec = new Codec({ array: true, depth });
+    numberCodecs.set(depth, codec);
+  }
+  return codec;
+}
+
+const CODEC_CHUNK = 30000;
+
+export const packNumbers = (values: number[], depth: number): string => {
+  if (values.length <= CODEC_CHUNK) return numberCodec(depth).encode(values);
+  let result = '';
+  for (let i = 0; i < values.length; i += CODEC_CHUNK) {
+    result += numberCodec(depth).encode(values.slice(i, i + CODEC_CHUNK));
+  }
+  return result;
+};
+
+export const unpackNumbers = (str: string, depth: number): number[] => {
+  const chunkChars = 1 + Math.ceil((CODEC_CHUNK * depth) / 15);
+  if (str.length <= chunkChars) return numberCodec(depth).decode(str);
+  const result: number[] = [];
+  for (let i = 0; i < str.length; i += chunkChars) {
+    result.push(...numberCodec(depth).decode(str.slice(i, i + chunkChars)));
+  }
+  return result;
+};
+
+const singleNumberCodecs = new Map<number, Codec<false>>();
+
+function singleNumberCodec(depth: number): Codec<false> {
+  let codec = singleNumberCodecs.get(depth);
+  if (!codec) {
+    codec = new Codec({ array: false, depth });
+    singleNumberCodecs.set(depth, codec);
+  }
+  return codec;
+}
+
+export const packNumber = (value: number, depth: number): string => singleNumberCodec(depth).encode(value);
+
+export const unpackNumber = (str: string, depth: number): number => singleNumberCodec(depth).decode(str);
 /**
  * Pack RoomPosition to two Unicode characters with screeps-utf15
  */
