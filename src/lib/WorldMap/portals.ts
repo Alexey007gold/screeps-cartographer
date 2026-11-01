@@ -17,11 +17,17 @@ export const portalSets = new Map<string, Map<string, PortalSet>>();
 
 let portalSetsChanged = false;
 let nextExpiry = Infinity;
+let portalSetsVersion = 0;
+
+export function getPortalSetsVersion() {
+  return portalSetsVersion;
+}
 
 function linkPortalSet(portalSet: PortalSet) {
   linkOneWay(portalSet.room1, portalSet.room2, portalSet);
   linkOneWay(portalSet.room2, portalSet.room1, portalSet);
   if (portalSet.expires !== undefined) nextExpiry = Math.min(nextExpiry, portalSet.expires);
+  portalSetsVersion++;
 }
 
 function linkOneWay(from: string, to: string, portalSet: PortalSet) {
@@ -33,6 +39,7 @@ function linkOneWay(from: string, to: string, portalSet: PortalSet) {
 function unlinkPortalSet(room1: string, room2: string) {
   unlinkOneWay(room1, room2);
   unlinkOneWay(room2, room1);
+  portalSetsVersion++;
 }
 
 function unlinkOneWay(from: string, to: string) {

@@ -2,7 +2,7 @@ import { memoize, memoizeByTick } from 'lib/Utils/memoize';
 import { roomNameToCoords } from 'utils/packPositions';
 import { MoveOpts } from '../';
 import { config } from '../../config';
-import { PortalSet, describeExitsWithPortals, portalSets } from './portals';
+import { PortalSet, describeExitsWithPortals, getPortalSetsVersion, portalSets } from './portals';
 import { isHighway, isSourceKeeperRoom } from './selectors';
 
 /**
@@ -227,27 +227,97 @@ const manhattanDistance = memoizeByTick(
   }
 );
 
-const manhattanDistanceToClosestPortal = memoizeByTick(
-  room => room,
-  (room: string) => {
-    let minDistance = Infinity;
-    for (const portal of portalSets.keys()) {
-      minDistance = Math.min(minDistance, manhattanDistance(room, portal));
+interface PortalRouteField {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  distances: Uint16Array;
+}
+
+interface PortalGraph {
+  version: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  rooms: { wx: number; wy: number; links: { wx: number; wy: number }[] }[];
+}
+
+let portalGraph: PortalGraph | undefined;
+
+function getPortalGraph(): PortalGraph {
+  const version = getPortalSetsVersion();
+  if (portalGraph?.version === version) return portalGraph;
+  const rooms = [...portalSets.entries()].map(([room, links]) => ({
+    ...roomNameToCoords(room),
+    links: [...links.keys()].map(linked => roomNameToCoords(linked))
+  }));
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const { wx, wy } of rooms) {
+    minX = Math.min(minX, wx);
+    minY = Math.min(minY, wy);
+    maxX = Math.max(maxX, wx);
+    maxY = Math.max(maxY, wy);
+  }
+  portalGraph = { version, minX, minY, maxX, maxY, rooms };
+  return portalGraph;
+}
+
+const portalRouteField = memoizeByTick(
+  (toRooms: string[]) => getPortalSetsVersion() + ':' + toRooms.join(','),
+  (toRooms: string[]): PortalRouteField => {
+    const graph = getPortalGraph();
+    const targets = toRooms.map(room => roomNameToCoords(room));
+    let { minX, minY, maxX, maxY } = graph;
+    for (const { wx, wy } of targets) {
+      minX = Math.min(minX, wx);
+      minY = Math.min(minY, wy);
+      maxX = Math.max(maxX, wx);
+      maxY = Math.max(maxY, wy);
     }
-    return minDistance;
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+    const indexOf = (wx: number, wy: number) => (wy - minY) * width + (wx - minX);
+
+    const portalAt = new Int32Array(width * height).fill(-1);
+    graph.rooms.forEach(({ wx, wy }, i) => (portalAt[indexOf(wx, wy)] = i));
+
+    const distances = new Uint16Array(width * height).fill(0xffff);
+    const queue = new Int32Array(width * height);
+    let head = 0;
+    let tail = 0;
+    const visit = (index: number, distance: number) => {
+      if (distances[index] <= distance) return;
+      distances[index] = distance;
+      queue[tail++] = index;
+    };
+    for (const { wx, wy } of targets) visit(indexOf(wx, wy), 0);
+    while (head < tail) {
+      const index = queue[head++];
+      const x = index % width;
+      const y = (index - x) / width;
+      const next = distances[index] + 1;
+      if (x > 0) visit(index - 1, next);
+      if (x < width - 1) visit(index + 1, next);
+      if (y > 0) visit(index - width, next);
+      if (y < height - 1) visit(index + width, next);
+      const portal = portalAt[index];
+      if (portal >= 0) for (const link of graph.rooms[portal].links) visit(indexOf(link.wx, link.wy), next);
+    }
+    return { minX, minY, maxX, maxY, distances };
   }
 );
 
-/**
- * Normal A* heuristic would just be the manhattan distance - here we
- * must include distance to the nearest portals as well. This is still
- * an admissible heuristic: https://stackoverflow.com/a/14428389
- */
-function findRouteHeuristic(fromRoom: string, toRoom: string) {
-  return Math.min(
-    manhattanDistance(fromRoom, toRoom),
-    manhattanDistanceToClosestPortal(fromRoom) + manhattanDistanceToClosestPortal(toRoom)
-  );
+function portalRouteHeuristic(field: PortalRouteField, room: string) {
+  const { minX, minY, maxX, maxY, distances } = field;
+  const { wx, wy } = roomNameToCoords(room);
+  const x = Math.min(Math.max(wx, minX), maxX);
+  const y = Math.min(Math.max(wy, minY), maxY);
+  return Math.abs(wx - x) + Math.abs(wy - y) + distances[(y - minY) * (maxX - minX + 1) + (x - minX)];
 }
 
 /**
@@ -264,6 +334,11 @@ export function findRouteWithPortals(
   const routeCallback = opts?.routeCallback ?? (() => 1);
   const maxCost = opts?.maxCost ?? Infinity;
   let cutByMaxCost = false;
+  const field = !avoidPortals && portalSets.size > 0 ? portalRouteField(toRooms) : undefined;
+  const heuristic = (room: string) =>
+    field
+      ? portalRouteHeuristic(field, room)
+      : Math.min(...toRooms.map(toRoom => manhattanDistance(room, toRoom)));
 
   // A* search, using describeExits to map the grid
   const frontier = new PriorityQueue<string>();
@@ -280,8 +355,7 @@ export function findRouteWithPortals(
     for (const next of describeExitsWithPortals(current, !avoidPortals)) {
       const cost = costSoFar.get(current)! + routeCallback(next, current);
       if (cost !== Infinity && (!costSoFar.has(next) || cost < costSoFar.get(next)!)) {
-        const heuristic = avoidPortals ? manhattanDistance : findRouteHeuristic;
-        const priority = cost + Math.min(...toRooms.map(toRoom => heuristic(next, toRoom)));
+        const priority = cost + heuristic(next);
         if (priority > maxCost) {
           cutByMaxCost = true;
           continue;
