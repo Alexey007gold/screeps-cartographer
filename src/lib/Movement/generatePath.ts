@@ -54,7 +54,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
           maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * route.rooms.length),
           roomCallback: configureRoomCallback(actualOpts, targets, route.rooms)
         });
-        if (!result.path.length || result.incomplete) return undefined;
+        if (result.incomplete) return undefined;
         path.push(...result.path);
       } else {
         // portal set - pathfind to the closest portal in the portalset
@@ -69,9 +69,11 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
           maxOps: Math.min(actualOpts.maxOps ?? 100000, (actualOpts.maxOpsPerRoom ?? 2000) * route.rooms.length),
           roomCallback: configureRoomCallback(actualOpts, targets, route.rooms)
         });
-        if (!result.path.length || result.incomplete) return undefined;
+        if (result.incomplete) return undefined;
+        const lastStep = result.path[result.path.length - 1] ?? workingOrigin;
         // paths to range 1 of portal - select a portal at the end of the path
-        const portal = portalTargets.find(t => t.pos.isNearTo(result.path[result.path.length - 1]))!.pos;
+        const portal = portalTargets.find(t => t.pos.isNearTo(lastStep))?.pos;
+        if (!portal) return undefined;
         path.push(...result.path, portal);
 
         // The next path begins at the destination of the target portal
@@ -86,6 +88,7 @@ export function generatePath(origin: RoomPosition, targets: MoveTarget[], opts?:
             throw new Error(`Portal ${portal} not found in portalSet ${JSON.stringify(route.portalSet)}`);
           workingOrigin = new RoomPosition(destination.x, destination.y, route.portalSet.room1);
         }
+        path.push(workingOrigin);
       }
     }
 

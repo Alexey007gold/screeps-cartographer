@@ -39,7 +39,7 @@ export function findRoute(
     },
     actualOpts.avoidPortals
   );
-  if (generatedRoutes === ERR_NO_PATH) return undefined;
+  if (generatedRoutes === ERR_NO_PATH || generatedRoutes === ERR_NOT_IN_RANGE) return undefined;
 
   // enhance the route with extra rooms to improve pathfinding
   return generatedRoutes.map(route => {
@@ -173,20 +173,46 @@ function exitTileByIndex(exit: ExitConstant, index: number) {
 }
 
 class PriorityQueue<T> {
-  private queue: [number, T][] = [];
+  private heap: { priority: number; order: number; item: T }[] = [];
+  private nextOrder = 0;
 
   put(item: T, priority: number) {
-    let insertIndex = this.queue.findIndex(([p]) => p > priority);
-    if (insertIndex === -1) insertIndex = this.queue.length;
-    this.queue.splice(insertIndex, 0, [priority, item]);
-  }
-  take() {
-    return this.queue.shift()?.[1];
-  }
-  *[Symbol.iterator]() {
-    for (const [_, item] of this.queue) {
-      yield item;
+    const heap = this.heap;
+    const entry = { priority, order: this.nextOrder++, item };
+    let i = heap.length;
+    heap.push(entry);
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!this.before(entry, heap[parent])) break;
+      heap[i] = heap[parent];
+      i = parent;
     }
+    heap[i] = entry;
+  }
+
+  take() {
+    const heap = this.heap;
+    if (heap.length === 0) return undefined;
+    const top = heap[0];
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      let i = 0;
+      while (true) {
+        const left = 2 * i + 1;
+        if (left >= heap.length) break;
+        const right = left + 1;
+        const child = right < heap.length && this.before(heap[right], heap[left]) ? right : left;
+        if (!this.before(heap[child], last)) break;
+        heap[i] = heap[child];
+        i = child;
+      }
+      heap[i] = last;
+    }
+    return top.item;
+  }
+
+  private before(a: { priority: number; order: number }, b: { priority: number; order: number }) {
+    return a.priority < b.priority || (a.priority === b.priority && a.order < b.order);
   }
 }
 
@@ -230,12 +256,14 @@ function findRouteHeuristic(fromRoom: string, toRoom: string) {
 export function findRouteWithPortals(
   fromRoom: string,
   toRooms: string[],
-  opts?: RouteOptions,
+  opts?: Partial<RouteOptions> & { maxCost?: number },
   avoidPortals?: boolean
-): { room: string; exit?: ExitConstant; portalSet?: PortalSet }[][] | ERR_NO_PATH {
+): { room: string; exit?: ExitConstant; portalSet?: PortalSet }[][] | ERR_NO_PATH | ERR_NOT_IN_RANGE {
   if (toRooms.includes(fromRoom)) return [];
 
   const routeCallback = opts?.routeCallback ?? (() => 1);
+  const maxCost = opts?.maxCost ?? Infinity;
+  let cutByMaxCost = false;
 
   // A* search, using describeExits to map the grid
   const frontier = new PriorityQueue<string>();
@@ -249,11 +277,16 @@ export function findRouteWithPortals(
   while (current) {
     if (toRooms.includes(current)) break;
 
-    for (const next of describeExitsWithPortals(current)) {
+    for (const next of describeExitsWithPortals(current, !avoidPortals)) {
       const cost = costSoFar.get(current)! + routeCallback(next, current);
       if (cost !== Infinity && (!costSoFar.has(next) || cost < costSoFar.get(next)!)) {
+        const heuristic = avoidPortals ? manhattanDistance : findRouteHeuristic;
+        const priority = cost + Math.min(...toRooms.map(toRoom => heuristic(next, toRoom)));
+        if (priority > maxCost) {
+          cutByMaxCost = true;
+          continue;
+        }
         costSoFar.set(next, cost);
-        const priority = cost + Math.min(...toRooms.map(toRoom => findRouteHeuristic(next, toRoom)));
         frontier.put(next, priority);
         cameFrom.set(next, current);
       }
@@ -287,5 +320,5 @@ export function findRouteWithPortals(
     return paths;
   }
 
-  return ERR_NO_PATH;
+  return cutByMaxCost ? ERR_NOT_IN_RANGE : ERR_NO_PATH;
 }

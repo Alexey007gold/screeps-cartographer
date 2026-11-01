@@ -127,6 +127,7 @@ export * from './Movement/PathUtil';
 export { blockSquare, getMoveIntents } from './TrafficManager/moveLedger';
 export * from './TrafficManager/reconcileTraffic';
 export { configureRoomCallback } from './CostMatrixes';
+export { findPortalRoute } from './WorldMap/findPortalRoute';
 
 export function preTick() {
   cleanAllCaches();

@@ -15,16 +15,37 @@ export interface PortalSet {
 
 export const portalSets = new Map<string, Map<string, PortalSet>>();
 
+let portalSetsChanged = false;
+let nextExpiry = Infinity;
+
+function linkPortalSet(portalSet: PortalSet) {
+  linkOneWay(portalSet.room1, portalSet.room2, portalSet);
+  linkOneWay(portalSet.room2, portalSet.room1, portalSet);
+  if (portalSet.expires !== undefined) nextExpiry = Math.min(nextExpiry, portalSet.expires);
+}
+
+function linkOneWay(from: string, to: string, portalSet: PortalSet) {
+  const map = portalSets.get(from) ?? new Map<string, PortalSet>();
+  map.set(to, portalSet);
+  portalSets.set(from, map);
+}
+
+function unlinkPortalSet(room1: string, room2: string) {
+  unlinkOneWay(room1, room2);
+  unlinkOneWay(room2, room1);
+}
+
+function unlinkOneWay(from: string, to: string) {
+  const map = portalSets.get(from);
+  if (!map) return;
+  map.delete(to);
+  if (map.size === 0) portalSets.delete(from);
+}
+
 // deserialize portal sets after a global reset
 Memory[config.MEMORY_PORTAL_PATH] ??= [];
 for (const serializedPortalSet of Memory[config.MEMORY_PORTAL_PATH]) {
-  const portalSet = deserializePortalSet(serializedPortalSet);
-  const originMap = portalSets.get(portalSet.room1) ?? new Map<string, PortalSet>();
-  originMap.set(portalSet.room2, portalSet);
-  portalSets.set(portalSet.room1, originMap);
-  const destinationMap = portalSets.get(portalSet.room2) ?? new Map<string, PortalSet>();
-  destinationMap.set(portalSet.room1, portalSet);
-  portalSets.set(portalSet.room2, destinationMap);
+  linkPortalSet(deserializePortalSet(serializedPortalSet));
 }
 
 /**
@@ -38,42 +59,60 @@ export function scanPortals(room: string) {
 
   const observedTargets = new Set<string>();
   for (const portalSet of collectIntrashardPortals(room)) {
-    const originMap = portalSets.get(portalSet.room1) ?? new Map<string, PortalSet>();
-    originMap.set(portalSet.room2, portalSet);
-    const destinationMap = portalSets.get(portalSet.room2) ?? new Map<string, PortalSet>();
-    destinationMap.set(portalSet.room1, portalSet);
+    const known = portalSets.get(portalSet.room1)?.get(portalSet.room2);
+    if (!known || !isSamePortalSet(known, portalSet)) {
+      linkPortalSet(portalSet);
+      portalSetsChanged = true;
+    }
     observedTargets.add(portalSet.room2);
   }
 
   // cleanup old portal sets
-  const portalSetMap = portalSets.get(room);
-  for (const to of portalSetMap?.keys() ?? []) {
+  for (const to of [...(portalSets.get(room)?.keys() ?? [])]) {
     if (!observedTargets.has(to)) {
       // this connection has disappeared
-      portalSets.get(room)?.delete(to);
-      portalSets.get(to)?.delete(room);
+      unlinkPortalSet(room, to);
+      portalSetsChanged = true;
     }
   }
 }
 
 export function cachePortals() {
+  if (Game.time > nextExpiry) {
+    removeExpiredPortalSets();
+  }
+  if (!portalSetsChanged) return;
+  portalSetsChanged = false;
+
   // serialize portal sets
-  const allPortalSets = new Set();
+  const allPortalSets = new Set<PortalSet>();
   Memory[config.MEMORY_PORTAL_PATH] = [];
   for (const portalSetMap of portalSets.values()) {
     for (const portalSet of portalSetMap.values()) {
       if (allPortalSets.has(portalSet)) continue;
       allPortalSets.add(portalSet);
-
-      // check if portalSet is expired
-      if (portalSet.expires && portalSet.expires < Game.time) {
-        portalSets.get(portalSet.room1)?.delete(portalSet.room2);
-        portalSets.get(portalSet.room2)?.delete(portalSet.room1);
-        continue;
-      }
-
-      // otherwise, cache the portalSet
       Memory[config.MEMORY_PORTAL_PATH].push(serializePortalSet(portalSet));
+    }
+  }
+}
+
+function isSamePortalSet(known: PortalSet, scanned: PortalSet) {
+  if (known.expires !== scanned.expires || known.portalMap.size !== scanned.portalMap.size) return false;
+  const knownSide = known.room1 === scanned.room1 ? known.portalMap : known.portalMap.reversed;
+  return [...scanned.portalMap.keys()].every(coord => knownSide.has(coord));
+}
+
+function removeExpiredPortalSets() {
+  nextExpiry = Infinity;
+  for (const portalSetMap of [...portalSets.values()]) {
+    for (const portalSet of [...portalSetMap.values()]) {
+      if (portalSet.expires === undefined) continue;
+      if (portalSet.expires < Game.time) {
+        unlinkPortalSet(portalSet.room1, portalSet.room2);
+        portalSetsChanged = true;
+      } else {
+        nextExpiry = Math.min(nextExpiry, portalSet.expires);
+      }
     }
   }
 }
@@ -151,15 +190,15 @@ function deserializePortalSet(serialized: string): PortalSet {
   };
 }
 
-export function describeExitsWithPortals(room: string): string[] {
+export function describeExitsWithPortals(room: string, includePortals = true): string[] {
   // initial set with normal room exits
   const exits = new Set(Object.values(Game.map.describeExits(room) ?? {}));
 
   // add portals to set
-  const portalSetMap = portalSets.get(room);
+  const portalSetMap = includePortals ? portalSets.get(room) : undefined;
   if (!portalSetMap) return [...exits];
-  for (const portalSet of portalSetMap.values()) {
-    exits.add(portalSet.room2);
+  for (const linkedRoom of portalSetMap.keys()) {
+    exits.add(linkedRoom);
   }
   return [...exits];
 }

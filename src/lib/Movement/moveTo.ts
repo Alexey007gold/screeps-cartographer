@@ -12,6 +12,7 @@ import { creepKey } from '../Keys/Creep';
 import { HeapCache } from 'lib/CachingStrategies/Heap';
 import { configureRoomCallback } from 'lib/CostMatrixes';
 import { pathHasAvoidTargets } from 'lib/WorldMap/pathHasAvoidTargets';
+import { portalSets } from 'lib/WorldMap/portals';
 import { slicedPath } from 'lib/WorldMap/selectors';
 import { config } from '../../config';
 import { generatePath } from '../Movement/generatePath';
@@ -107,10 +108,13 @@ export const moveTo = (
         clearCachedPath(creep, cache);
         // register move intent to stay here or in an adjacent viable position
         const cm = configureRoomCallback(actualOpts, normalizedTargets)(creep.pos.roomName);
+        const standsOnPortal =
+          portalSets.has(creep.pos.roomName) &&
+          creep.pos.lookFor(LOOK_STRUCTURES).some(s => s.structureType === STRUCTURE_PORTAL);
         move(
           creep,
           [
-            creep.pos,
+            ...(standsOnPortal ? [] : [creep.pos]),
             ...adjacentWalkablePositions(creep.pos, true).filter(
               p => normalizedTargets.some(t => t.pos.inRangeTo(p, t.range)) && (!cm || cm.get(p.x, p.y) !== 255) // exclude squares that are blocked by a cost matrix
             )
