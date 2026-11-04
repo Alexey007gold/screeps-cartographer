@@ -320,20 +320,75 @@ function portalRouteHeuristic(field: PortalRouteField, room: string) {
   return Math.abs(wx - x) + Math.abs(wy - y) + distances[(y - minY) * (maxX - minX + 1) + (x - minX)];
 }
 
+const POCKET_RANGE = 5;
+
+type RoomCoords = { wx: number; wy: number };
+
+function roomRange(a: RoomCoords, b: RoomCoords) {
+  return Math.max(Math.abs(a.wx - b.wx), Math.abs(a.wy - b.wy));
+}
+
+function highwayDistance({ wx, wy }: RoomCoords) {
+  const axis = (n: number) => {
+    const offset = (n < 0 ? ~n : n) % 10;
+    return Math.min(offset, 10 - offset);
+  };
+  return Math.min(axis(wx), axis(wy));
+}
+
+function isClosedPocket(
+  fromRoom: string,
+  toRoom: string,
+  routeCallback: (roomName: string, fromRoomName: string) => number,
+  avoidPortals?: boolean
+) {
+  const target = roomNameToCoords(toRoom);
+  const seen = new Set([toRoom]);
+  const frontier = new PriorityQueue<string>();
+  frontier.put(toRoom, highwayDistance(target));
+  let room = frontier.take();
+  while (room) {
+    if (!avoidPortals && portalSets.has(room)) return false;
+    for (const next of Object.values(Game.map.describeExits(room) ?? {})) {
+      if (seen.has(next)) continue;
+      if (routeCallback(room, next) === Infinity) continue;
+      if (next === fromRoom) return false;
+      const coords = roomNameToCoords(next);
+      const toHighway = highwayDistance(coords);
+      if (toHighway === 0 || roomRange(coords, target) > POCKET_RANGE) return false;
+      seen.add(next);
+      frontier.put(next, toHighway);
+    }
+    room = frontier.take();
+  }
+  return true;
+}
+
 /**
  * Returns a sequence of rooms. Exits between rooms may be normal room exits or a portal set.
  */
 export function findRouteWithPortals(
   fromRoom: string,
   toRooms: string[],
-  opts?: Partial<RouteOptions> & { maxCost?: number },
+  opts?: Partial<RouteOptions> & { maxCost?: number; maxRange?: number },
   avoidPortals?: boolean
 ): { room: string; exit?: ExitConstant; portalSet?: PortalSet }[][] | ERR_NO_PATH | ERR_NOT_IN_RANGE {
   if (toRooms.includes(fromRoom)) return [];
 
   const routeCallback = opts?.routeCallback ?? (() => 1);
   const maxCost = opts?.maxCost ?? Infinity;
+  const maxRange = opts?.maxRange ?? Infinity;
+  if (maxRange !== Infinity && toRooms.every(toRoom => isClosedPocket(fromRoom, toRoom, routeCallback, avoidPortals))) {
+    return ERR_NO_PATH;
+  }
   let cutByMaxCost = false;
+  const anchors = [roomNameToCoords(fromRoom)];
+  const outOfRange = new Map<string, { cost: number; from: string }>();
+  const inRange = (room: string) => {
+    if (maxRange === Infinity) return true;
+    const coords = roomNameToCoords(room);
+    return anchors.some(anchor => roomRange(anchor, coords) <= maxRange);
+  };
   const field = !avoidPortals && portalSets.size > 0 ? portalRouteField(toRooms) : undefined;
   const heuristic = (room: string) =>
     field
@@ -348,25 +403,53 @@ export function findRouteWithPortals(
   cameFrom.set(fromRoom, fromRoom);
   costSoFar.set(fromRoom, 0);
 
+  const visit = (room: string, cost: number, from: string, priority = cost + heuristic(room)) => {
+    costSoFar.set(room, cost);
+    frontier.put(room, priority);
+    cameFrom.set(room, from);
+  };
+  const addAnchor = (room: string) => {
+    anchors.push(roomNameToCoords(room));
+    for (const [deferred, { cost, from }] of outOfRange) {
+      if (!inRange(deferred)) continue;
+      outOfRange.delete(deferred);
+      if ((costSoFar.get(deferred) ?? Infinity) <= cost) continue;
+      visit(deferred, cost, from);
+    }
+  };
+
+  const expandedAt = new Map<string, number>();
   let current = frontier.take();
   while (current) {
     if (toRooms.includes(current)) break;
+    const currentCost = costSoFar.get(current)!;
+    expandedAt.set(current, currentCost);
 
     for (const next of describeExitsWithPortals(current, !avoidPortals)) {
-      const cost = costSoFar.get(current)! + routeCallback(next, current);
+      const nextExpandedAt = expandedAt.get(next);
+      if (nextExpandedAt !== undefined && nextExpandedAt === costSoFar.get(next) && nextExpandedAt <= currentCost) {
+        continue;
+      }
+      const cost = currentCost + routeCallback(next, current);
       if (cost !== Infinity && (!costSoFar.has(next) || cost < costSoFar.get(next)!)) {
         const priority = cost + heuristic(next);
         if (priority > maxCost) {
           cutByMaxCost = true;
           continue;
         }
-        costSoFar.set(next, cost);
-        frontier.put(next, priority);
-        cameFrom.set(next, current);
+        const viaPortal = !avoidPortals && !!portalSets.get(current)?.has(next);
+        if (!viaPortal && !inRange(next)) {
+          const deferred = outOfRange.get(next);
+          if (!deferred || cost < deferred.cost) outOfRange.set(next, { cost, from: current });
+          continue;
+        }
+        visit(next, cost, current, priority);
+        if (viaPortal && maxRange !== Infinity) addAnchor(next);
       }
     }
 
-    current = frontier.take();
+    do current = frontier.take();
+    while (current && expandedAt.get(current) === costSoFar.get(current));
   }
 
   if (current && toRooms.includes(current)) {

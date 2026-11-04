@@ -6,4 +6,9 @@ module.exports = {
     'node_modules',
     'src'
   ],
+  globals: {
+    'ts-jest': {
+      isolatedModules: true
+    }
+  },
 };
