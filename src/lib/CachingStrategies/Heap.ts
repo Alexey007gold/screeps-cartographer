@@ -18,6 +18,7 @@ export const HeapCache: GenericCachingStrategy<any> = {
   },
   delete(key: string) {
     cache.delete(key);
+    expirationCache.delete(key);
   },
   with() {
     return HeapCache; // HeapCache never uses serializers

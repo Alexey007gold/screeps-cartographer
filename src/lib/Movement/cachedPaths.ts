@@ -5,7 +5,7 @@ import { getRangeTo } from '../../utils/packPositions';
 import { CachingStrategy, PositionListSerializer } from '../CachingStrategies';
 import { HeapCache } from '../CachingStrategies/Heap';
 import { MemoryCache } from '../CachingStrategies/Memory';
-import { creepKey } from '../Keys/Creep';
+import { creepKey, creepKeyExpiration } from '../Keys/Creep';
 import { generatePath } from './generatePath';
 import { move } from './move';
 import { normalizeTargets } from './selectors';
@@ -139,7 +139,7 @@ export function followPath(creep: Creep | PowerCreep, key: string, opts?: MoveBy
     // Unable to find our location relative to the path
     return ERR_NOT_FOUND;
   }
-  HeapCache.set(creepKey(creep, keys.MOVE_BY_PATH_INDEX), currentIndex);
+  HeapCache.set(creepKey(creep, keys.MOVE_BY_PATH_INDEX), currentIndex, creepKeyExpiration());
 
   // creep is on the path and index is valid
   let nextIndex = Math.max(0, Math.min(path.length - 1, opts?.reverse ? currentIndex - 1 : currentIndex + 1));

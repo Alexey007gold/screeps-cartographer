@@ -7,7 +7,7 @@ import {
   PositionListSerializer
 } from '../CachingStrategies';
 import { JsonSerializer } from '../CachingStrategies/Serializers/Json';
-import { creepKey } from '../Keys/Creep';
+import { creepKey, creepKeyExpiration } from '../Keys/Creep';
 // import { logCpu, logCpuStart } from '../../utils/logCpu';
 import { HeapCache } from 'lib/CachingStrategies/Heap';
 import { configureRoomCallback } from 'lib/CostMatrixes';
@@ -155,7 +155,7 @@ export const moveTo = (
   if (DEBUG) logCpu('checking opts');
 
   // cache opts
-  const expiration = actualOpts.reusePath ? Game.time + actualOpts.reusePath + 1 : undefined;
+  const expiration = actualOpts.reusePath ? Game.time + actualOpts.reusePath + 1 : creepKeyExpiration();
   cache.with(MoveTargetListSerializer).set(creepKey(creep, keys.CACHED_PATH_TARGETS), normalizedTargets, expiration);
   cache.with(JsonSerializer).set(
     creepKey(creep, keys.CACHED_PATH_OPTS),
@@ -227,7 +227,7 @@ export const moveTo = (
   if (DEBUG) logCpu('checking if creep is stuck');
 
   // generate cached path, if needed - cachePath will also normalize targets
-  const path = cachePath(creepKey(creep, keys.CACHED_PATH), creep.pos, targets, { ...actualOpts, cache });
+  const path = cachePath(creepKey(creep, keys.CACHED_PATH), creep.pos, targets, { ...actualOpts, cache, reusePath: actualOpts.reusePath || CREEP_LIFE_TIME });
 
   if (!path) return ERR_NO_PATH;
 
@@ -264,7 +264,7 @@ export const moveTo = (
   if (result === ERR_NOT_FOUND) {
     // creep has fallen off path: repath and try again
     clearCachedPath(creep, cache);
-    cachePath(creepKey(creep, keys.CACHED_PATH), creep.pos, normalizedTargets, { ...actualOpts, cache });
+    cachePath(creepKey(creep, keys.CACHED_PATH), creep.pos, normalizedTargets, { ...actualOpts, cache, reusePath: actualOpts.reusePath || CREEP_LIFE_TIME });
     result = followPath(creep, creepKey(creep, keys.CACHED_PATH), {
       ...actualOpts,
       reverse: false,

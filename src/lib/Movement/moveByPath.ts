@@ -1,6 +1,6 @@
 import { config } from 'config';
 import { HeapCache } from 'lib/CachingStrategies/Heap';
-import { creepKey } from 'lib/Keys';
+import { creepKey, creepKeyExpiration } from 'lib/Keys';
 import { pathHasAvoidTargets } from 'lib/WorldMap/pathHasAvoidTargets';
 import { slicedPath } from 'lib/WorldMap/selectors';
 import { followPath, getCachedPath, MoveByCachedPathOpts } from './cachedPaths';
@@ -52,7 +52,7 @@ export function moveByPath(creep: Creep | PowerCreep, key: string, opts?: MoveBy
         } else {
           rerouteIndex = creepIndex + 2;
         }
-        HeapCache.set(creepKey(creep, keys.REROUTE_PATH_INDEX), rerouteIndex);
+        HeapCache.set(creepKey(creep, keys.REROUTE_PATH_INDEX), rerouteIndex, creepKeyExpiration());
       }
     } else {
       // on the path, not stuck: success!

@@ -1,5 +1,5 @@
 import { HeapCache } from '../CachingStrategies/Heap';
-import { creepKey } from '../Keys/Creep';
+import { creepKey, creepKeyExpiration } from '../Keys/Creep';
 
 const keys = {
   LAST_POSITION: '_csp',
@@ -22,13 +22,14 @@ export const creepIsStuck = (creep: Creep | PowerCreep, stuckLimit: number) => {
   const lastCheckTime = HeapCache.get(creepKey(creep, keys.LAST_CHECK_TIME));
 
   // go ahead and update pos and checked time in the cache
-  HeapCache.set(creepKey(creep, keys.LAST_POSITION), creep.pos);
-  HeapCache.set(creepKey(creep, keys.LAST_CHECK_TIME), Game.time);
+  const expiration = creepKeyExpiration();
+  HeapCache.set(creepKey(creep, keys.LAST_POSITION), creep.pos, expiration);
+  HeapCache.set(creepKey(creep, keys.LAST_CHECK_TIME), Game.time, expiration);
 
   // reset timer if position changed, first call, or there was a gap in movement attempts
   if (!lastPos || !lastTime || !lastCheckTime || !creep.pos.isEqualTo(lastPos) || lastCheckTime < Game.time - 1) {
     // start counting
-    HeapCache.set(creepKey(creep, keys.LAST_POSITION_TIME), Game.time);
+    HeapCache.set(creepKey(creep, keys.LAST_POSITION_TIME), Game.time, expiration);
     return false;
   }
 
